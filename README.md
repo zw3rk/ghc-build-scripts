@@ -8,7 +8,8 @@ The `build-mobile-ghcs` script is supposed to be use as follows:
 
 And requires <https://github.com/angerman/ghc-ios-scripts> to be in `$PATH`, as well as having libiconv built for
 both android platforms (iOS comes with libiconv).  Also path/to/clang should be a rather recent (read patched)
-clang for iOS to work without the need to disable `-dead_strip`.
+clang for iOS to work without the need to disable `-dead_strip`. Running the script takes about an hour on my iMac,
+ymmv.
 
 and will result in ghcs for:
 
