@@ -1,0 +1,62 @@
+#!/bin/bash
+
+PREFIX=$1
+ICONV=$2
+CLANG=$3
+
+echo "PREFIX=$PREFIX"
+echo " ICONV=$ICONV"
+echo " CLANG=$CLANG"
+
+for target in armv7-android arm64-android arm64-ios
+do
+    git clean -x -f -d
+    make clean && make distclean
+    ./boot
+    cat mk/build.mk.sample|sed 's/^#BuildFlavour  = quick-cross$/BuildFlavour = quick-cross/' > mk/build.mk
+    echo "TARGET: $target"
+    case $target in
+        armv7-android)
+            ./configure --target=armv7-none-linux-androideabi \
+                        --prefix=$PREFIX --disable-large-address-space \
+                        --with-clang=$CLANG \
+                        --with-iconv-includes=$ICONV/arm-linux-androideabi/include \
+                        --with-iconv-libraries=$ICONV/arm-linux-androideabi/lib
+
+            make -j8
+            make install
+
+            cd iserv
+            PATH=$PREFIX/bin:$PATH armv7-none-linux-androideabi-cabal install cryptonite -f-integer-gmp --disable-library-stripping
+            PATH=$PREFIX/bin:$PATH armv7-none-linux-androideabi-cabal install -flibrary
+            cd ..
+            ;;
+        arm64-android)
+            ./configure --target=aarch64-none-linux-android \
+                        --prefix=$PREFIX --disable-large-address-space \
+                        --with-clang=$CLANG \
+                        --with-iconv-includes=$ICONV/aarch64-linux-android/include \
+                        --with-iconv-libraries=$ICONV/aarch64-linux-android/lib
+            make -j8
+            make install
+
+            cd iserv
+            PATH=$PREFIX/bin:$PATH aarch64-none-linux-android-cabal install cryptonite -f-integer-gmp --disable-library-stripping
+            PATH=$PREFIX/bin:$PATH aarch64-none-linux-android-cabal install -flibrary
+            cd ..
+            ;;
+        arm64-ios)
+            ./configure --target=aarch64-apple-darwin14 \
+                        --prefix=$PREFIX --disable-large-address-space \
+                        --with-clang=$CLANG
+
+            make -j8
+            make install
+
+            cd iserv
+            PATH=$PREFIX/bin:$PATH aarch64-apple-darwin14-cabal install cryptonite -f-integer-gmp --disable-library-stripping
+            PATH=$PREFIX/bin:$PATH aarch64-apple-darwin14-cabal install -flibrary
+            cd ..
+            ;;
+    esac
+done
