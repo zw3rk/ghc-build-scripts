@@ -4,59 +4,74 @@ PREFIX=$1
 ICONV=$2
 CLANG=$3
 
-echo "PREFIX=$PREFIX"
-echo " ICONV=$ICONV"
-echo " CLANG=$CLANG"
+TARGETS=${4:-"host armv7-android arm64-android arm64-ios"}
+echo " PREFIX=$PREFIX"
+echo "  ICONV=$ICONV"
+echo "  CLANG=$CLANG"
+echo "TARGETS=$TARGETS"
 
-for target in armv7-android arm64-android arm64-ios
+for target in $TARGETS
 do
-    git clean -x -f -d
-    make clean && make distclean
-    ./boot
-    cat mk/build.mk.sample|sed 's/^#BuildFlavour  = quick-cross$/BuildFlavour = quick-cross/' > mk/build.mk
     echo "TARGET: $target"
+    MK_FLAVOUR="quick-llvm"
+    CONFIGURE_TARGET=""
+    CONFIGURE_FLAGS="--prefix=${PREFIX} --disable-large-address-space --with-clang=${CLANG}"
+    CONFIGURE_EXTRAS=""
+    CABAL="cabal"
+    CROSS=1
+
     case $target in
+        host)
+            CROSS=0
+            ;;
         armv7-android)
-            ./configure --target=armv7-none-linux-androideabi \
-                        --prefix=$PREFIX --disable-large-address-space \
-                        --with-clang=$CLANG \
-                        --with-iconv-includes=$ICONV/arm-linux-androideabi/include \
-                        --with-iconv-libraries=$ICONV/arm-linux-androideabi/lib
-
-            make -j8
-            make install
-
-            cd iserv
-            PATH=$PREFIX/bin:$PATH armv7-none-linux-androideabi-cabal install cryptonite -f-integer-gmp --disable-library-stripping
-            PATH=$PREFIX/bin:$PATH armv7-none-linux-androideabi-cabal install -flibrary
-            cd ..
+            CONFIGURE_TARGET=--target=armv7-none-linux-androideabi
+            CONFIGURE_EXTRAS="--with-iconv-includes=$ICONV/arm-linux-androideabi/include --with-iconv-libraries=$ICONV/arm-linux-androideabi/lib"
+            CABAL=armv7-none-linux-androideabi-cabal
             ;;
         arm64-android)
-            ./configure --target=aarch64-none-linux-android \
-                        --prefix=$PREFIX --disable-large-address-space \
-                        --with-clang=$CLANG \
-                        --with-iconv-includes=$ICONV/aarch64-linux-android/include \
-                        --with-iconv-libraries=$ICONV/aarch64-linux-android/lib
-            make -j8
-            make install
-
-            cd iserv
-            PATH=$PREFIX/bin:$PATH aarch64-none-linux-android-cabal install cryptonite -f-integer-gmp --disable-library-stripping
-            PATH=$PREFIX/bin:$PATH aarch64-none-linux-android-cabal install -flibrary
-            cd ..
+            CONFIGURE_TARGET=--target=aarch64-none-linux-android
+            CONFIGURE_EXTRAS="--with-iconv-includes=$ICONV/aarch64-linux-android/include --with-iconv-libraries=$ICONV/aarch64-linux-android/lib"
+            CABAL=aarch64-none-linux-android-cabal
             ;;
         arm64-ios)
-            ./configure --target=aarch64-apple-darwin14 \
-                        --prefix=$PREFIX --disable-large-address-space \
-                        --with-clang=$CLANG
-
-            make -j8
-            make install
-
-            cd iserv
-            PATH=$PREFIX/bin:$PATH aarch64-apple-darwin14-cabal install cryptonite -f-integer-gmp --disable-library-stripping
-            PATH=$PREFIX/bin:$PATH aarch64-apple-darwin14-cabal install -flibrary
-            cd ..
+            CONFIGURE_TARGET=--target=aarch64-apple-darwin14
+            CABAL=aarch64-apple-darwin14-cabal
+            ;;
+        *)
+            exit "unknown target"
             ;;
     esac
+
+    git clean -x --force -d --quiet
+    make --silent clean && make -s distclean
+
+    cat mk/build.mk.sample|sed -E "s/^#BuildFlavour[ ]+= ${MK_FLAVOUR}$/BuildFlavour = ${MK_FLAVOUR}/" > mk/build.mk
+
+    # boot after mk/build.mk, to silence the warning about a missing mk/build.mk
+    ./boot
+    # DYNAMIC_BY_DEFAULT doesn't work on iOS
+    #    echo "DYNAMIC_BY_DEFAULT = YES" >> mk/build.mk
+    # DYNAMIC_GHC_PROGRAMS and DYNAMIC_TOO works on iOS, when compiling on macOS.
+    #    echo "DYNAMIC_GHC_PROGRAMS = YES" >> mk/build.mk
+    #    echo "DYNAMIC_TOO = YES" >> mk/build.mk
+
+    echo "Configuring $target..."
+    ./configure --silent --target=$CONFIGURE_TARGET $CONFIGURE_FLAGS $CONFIGURE_EXTRAS
+    echo "Building $target..."
+    make --silent -j8
+    echo "Installing $target..."
+    make --silent install
+    echo "Building and installing iserv for $target..."
+    cd iserv
+    PATH=$PREFIX/bin:$PATH $CABAL update
+    if [ CROSS -eq 1 ]; then
+        PATH=$PREFIX/bin:$PATH $CABAL install cryptonite -f-integer-gmp --disable-library-stripping
+        PATH=$PREFIX/bin:$PATH $CABAL install -flibrary
+    else
+        PATH=$PREFIX/bin:$PATH $CABAL install cryptonite
+        PATH=$PREFIX/bin:$PATH $CABAL install -flibrary -fproxy
+    fi
+    cd ..
+    echo "TARGET: $target done."
 done
