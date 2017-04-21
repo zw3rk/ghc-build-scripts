@@ -1,19 +1,67 @@
 #!/bin/bash
 
-PREFIX=$1
-ICONV=$2
-CLANG=$3
+help_text() {
+    echo "Usage:
+  ${0##*/} [-h][-d] --prefix=... --iconv=... --clang=... [target1 target2 target3]
 
-TARGETS=${4:-"host armv7-android arm64-android arm64-ios"}
-echo " PREFIX=$PREFIX"
-echo "  ICONV=$ICONV"
-echo "  CLANG=$CLANG"
-echo "TARGETS=$TARGETS"
+Options:
+
+  -h, --help
+    display this help and exit
+
+  -d, --debug
+    show set values
+
+  --no-clean
+    do not clean the tree before building
+
+  --no-configure
+    do not run ./boot or ./configure
+
+  --prefix=<prefix>
+    the prefix to pass to configure
+
+  --iconv=<iconv>
+    path to iconv.
+
+  --clang=<clang>
+    path to the clang binary to use"
+}
+
+CLEAN=1
+CONFIGURE=1
+BUILD=1
+DEBUG=0
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --no-clean) CLEAN=0; shift 1;;
+        --no-configure) CONFIGURE=0; shift 1;;
+        --no-build) BUILD=0; shift 1;;
+        --prefix=*) PREFIX="${1#*=}"; shift 1;;
+        --iconv=*) ICONV="${1#*=}"; shift 1;;
+        --clang=*) CLANG="${1#*=}"; shift 1;;
+        -d|--debug) DEBUG=1; shift 1;;
+        -h|--help) help_text; exit;;
+        -*) echo "unknown option: $1" >&2; exit 1;;
+        *) args+="$1"; shift 1;;
+    esac
+done
+
+TARGETS=${args:-"host armv7-android arm64-android arm64-ios"}
+if [ $DEBUG -eq 1 ]; then
+    echo "   PREFIX=$PREFIX"
+    echo "    ICONV=$ICONV"
+    echo "    CLANG=$CLANG"
+    echo "  TARGETS=$TARGETS"
+    echo "    CLEAN=$CLEAN"
+    echo "CONFIGURE=$CONFIGURE"
+    exit
+fi
 
 for target in $TARGETS
 do
     echo "TARGET: $target"
-    MK_FLAVOUR="quick-llvm"
     CONFIGURE_TARGET=""
     CONFIGURE_FLAGS="--prefix=${PREFIX} --disable-large-address-space --with-clang=${CLANG}"
     CONFIGURE_EXTRAS=""
@@ -22,20 +70,24 @@ do
 
     case $target in
         host)
+            MK_FLAVOUR="quick-llvm"
             CROSS=0
             ;;
         armv7-android)
             CONFIGURE_TARGET=--target=armv7-none-linux-androideabi
             CONFIGURE_EXTRAS="--with-iconv-includes=$ICONV/arm-linux-androideabi/include --with-iconv-libraries=$ICONV/arm-linux-androideabi/lib"
+            MK_FLAVOUR="quick-cross"
             CABAL=armv7-none-linux-androideabi-cabal
             ;;
         arm64-android)
             CONFIGURE_TARGET=--target=aarch64-none-linux-android
             CONFIGURE_EXTRAS="--with-iconv-includes=$ICONV/aarch64-linux-android/include --with-iconv-libraries=$ICONV/aarch64-linux-android/lib"
+            MK_FLAVOUR="quick-cross"
             CABAL=aarch64-none-linux-android-cabal
             ;;
         arm64-ios)
             CONFIGURE_TARGET=--target=aarch64-apple-darwin14
+            MK_FLAVOUR="quick-cross"
             CABAL=aarch64-apple-darwin14-cabal
             ;;
         *)
@@ -43,33 +95,42 @@ do
             ;;
     esac
 
-    git clean -x --force -d --quiet
-    make --silent clean && make -s distclean
+    if [ $CLEAN -eq 1 ]; then
 
-    cat mk/build.mk.sample|sed -E "s/^#BuildFlavour[ ]+= ${MK_FLAVOUR}$/BuildFlavour = ${MK_FLAVOUR}/" > mk/build.mk
+        git clean -x --force -d --quiet
+        make --silent clean && make -s distclean
 
-    # boot after mk/build.mk, to silence the warning about a missing mk/build.mk
-    ./boot
+        cat mk/build.mk.sample|sed -E "s/^#BuildFlavour[ ]+= ${MK_FLAVOUR}$/BuildFlavour = ${MK_FLAVOUR}/" > mk/build.mk
+        # boot after mk/build.mk, to silence the warning about a missing mk/build.mk
+        ./boot
+    fi
+
+    echo "=== mk/build.mk ==="
+    cat mk/build.mk|grep -v "^#"|grep -v "^$"
+    echo "==================="
     # DYNAMIC_BY_DEFAULT doesn't work on iOS
     #    echo "DYNAMIC_BY_DEFAULT = YES" >> mk/build.mk
     # DYNAMIC_GHC_PROGRAMS and DYNAMIC_TOO works on iOS, when compiling on macOS.
     #    echo "DYNAMIC_GHC_PROGRAMS = YES" >> mk/build.mk
     #    echo "DYNAMIC_TOO = YES" >> mk/build.mk
-
-    echo "Configuring $target..."
-    ./configure --silent --target=$CONFIGURE_TARGET $CONFIGURE_FLAGS $CONFIGURE_EXTRAS
-    echo "Building $target..."
-    make --silent -j8
-    echo "Installing $target..."
-    make --silent install
-    echo "Building and installing iserv for $target..."
+    if [ $CONFIGURE -eq 1 ]; then
+        echo "Configuring $target..."
+        ./configure --silent $CONFIGURE_TARGET $CONFIGURE_FLAGS $CONFIGURE_EXTRAS
+    fi
+    if [ $BUILD -eq 1 ]; then
+        echo "Building $target..."
+        make --silent -j8
+        echo "Installing $target..."
+        make --silent install
+        echo "Building and installing iserv for $target..."
+    fi
     cd iserv
     PATH=$PREFIX/bin:$PATH $CABAL update
-    if [ CROSS -eq 1 ]; then
-        PATH=$PREFIX/bin:$PATH $CABAL install cryptonite -f-integer-gmp --disable-library-stripping
+    if [ $CROSS -eq 1 ]; then
+        # PATH=$PREFIX/bin:$PATH $CABAL install cryptonite -f-integer-gmp --disable-library-stripping
         PATH=$PREFIX/bin:$PATH $CABAL install -flibrary
     else
-        PATH=$PREFIX/bin:$PATH $CABAL install cryptonite
+        # PATH=$PREFIX/bin:$PATH $CABAL install cryptonite
         PATH=$PREFIX/bin:$PATH $CABAL install -flibrary -fproxy
     fi
     cd ..
