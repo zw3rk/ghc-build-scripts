@@ -1,0 +1,52 @@
+#!/bin/bash
+set -e
+# set -x
+
+help_text() {
+    echo "Usage:
+  ${0##*/} [-h] cabal [-- cabal opts]
+
+Options:
+
+  -h, --help
+    display this help and exit"
+}
+
+CABAL=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help) help_text; exit;;
+        --) shift 1; break;;
+        -*) echo "unknown option: $1" >&2; exit 1;;
+        *) if [ -z $CABAL ]
+           then CABAL="$1"
+           else args+="$1"
+           fi
+           shift 1;;
+    esac
+done
+
+if [ -z $CABAL ]; then
+    echo "No cabal selected" >&2
+    exit 1
+fi
+
+custom_pkgs="distributive comonad semigroupoids lens-head"
+
+for pkg in $custom_pkgs; do
+    echo "Building $pkg"
+    CABAL_FLAGS=
+    case $pkg in
+        *-head) CABAL_FLAGS+=" --source-repository=head"; pkg="${pkg%-*}";;
+        *) pkg=$pkg
+    esac
+    # use system cabal to get the package, until we are certain that $CABAL
+    # supports get properly.
+    cabal get $pkg $CABAL_FLAGS || true
+    cd $pkg*
+    # replace the custom build type with the simple build type.
+    # this is UNSAFE! an not necessarily guaranteed to work!
+    sed -i.bak -E 's/(build-type:[ ]+)Custom/\1Simple/g' *.cabal
+    $CABAL install "$@"
+    cd ..
+done

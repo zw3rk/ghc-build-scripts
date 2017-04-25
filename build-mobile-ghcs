@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+# set -x
 
 help_text() {
     echo "Usage:
@@ -28,16 +30,18 @@ Options:
     path to the clang binary to use"
 }
 
-CLEAN=1
-CONFIGURE=1
-BUILD=1
-DEBUG=0
+CLEAN=1 # clean prior to building
+CONFIGURE=1 # run ./configure
+BUILD=1 # run make
+DEBUG=0 # debug values
+DEVEL=0 # Use development snapshot (fro the cross compiler only...)
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --no-clean) CLEAN=0; shift 1;;
         --no-configure) CONFIGURE=0; shift 1;;
         --no-build) BUILD=0; shift 1;;
+        --with-devel) DEVEL=1; shift 1;;
         --prefix=*) PREFIX="${1#*=}"; shift 1;;
         --iconv=*) ICONV="${1#*=}"; shift 1;;
         --clang=*) CLANG="${1#*=}"; shift 1;;
@@ -56,15 +60,17 @@ if [ $DEBUG -eq 1 ]; then
     echo "  TARGETS=$TARGETS"
     echo "    CLEAN=$CLEAN"
     echo "CONFIGURE=$CONFIGURE"
+    echo "    BUILD=$BUILD"
+    echo "    DEVEL=$DEVEL"
     exit
 fi
+
+USE_DEVEL_FLAGS=" --enable-bootstrap-with-devel-snapshot --with-ghc=${PREFIX}/bin/ghc"
 
 for target in $TARGETS
 do
     echo "TARGET: $target"
-    CONFIGURE_TARGET=""
     CONFIGURE_FLAGS="--prefix=${PREFIX} --disable-large-address-space --with-clang=${CLANG}"
-    CONFIGURE_EXTRAS=""
     CABAL="cabal"
     CROSS=1
 
@@ -74,19 +80,21 @@ do
             CROSS=0
             ;;
         armv7-android)
-            CONFIGURE_TARGET=--target=armv7-none-linux-androideabi
-            CONFIGURE_EXTRAS="--with-iconv-includes=$ICONV/arm-linux-androideabi/include --with-iconv-libraries=$ICONV/arm-linux-androideabi/lib"
+            CONFIGURE_FLAGS+=" --target=armv7-none-linux-androideabi"
+            CONFIGURE_FLAGS+=" --with-iconv-includes=$ICONV/arm-linux-androideabi/include"
+            CONFIGURE_FLAGS+=" --with-iconv-libraries=$ICONV/arm-linux-androideabi/lib"
             MK_FLAVOUR="quick-cross"
             CABAL=armv7-none-linux-androideabi-cabal
             ;;
         arm64-android)
-            CONFIGURE_TARGET=--target=aarch64-none-linux-android
-            CONFIGURE_EXTRAS="--with-iconv-includes=$ICONV/aarch64-linux-android/include --with-iconv-libraries=$ICONV/aarch64-linux-android/lib"
+            CONFIGURE_FLAGS+=" --target=aarch64-none-linux-android"
+            CONFIGURE_FLAGS+=" --with-iconv-includes=$ICONV/aarch64-linux-android/include"
+            CONFIGURE_FLAGS+=" --with-iconv-libraries=$ICONV/aarch64-linux-android/lib"
             MK_FLAVOUR="quick-cross"
             CABAL=aarch64-none-linux-android-cabal
             ;;
         arm64-ios)
-            CONFIGURE_TARGET=--target=aarch64-apple-darwin14
+            CONFIGURE_FLAGS+=" --target=aarch64-apple-darwin14"
             MK_FLAVOUR="quick-cross"
             CABAL=aarch64-apple-darwin14-cabal
             ;;
@@ -113,9 +121,14 @@ do
     # DYNAMIC_GHC_PROGRAMS and DYNAMIC_TOO works on iOS, when compiling on macOS.
     #    echo "DYNAMIC_GHC_PROGRAMS = YES" >> mk/build.mk
     #    echo "DYNAMIC_TOO = YES" >> mk/build.mk
+    if [ $CROSS -eq 1 -a $DEVEL -eq 1 ]; then
+        echo "Adding devel snapshot flags..."
+        CONFIGURE_FLAGS+=$USE_DEVEL_FLAGS
+        echo $CONFIGURE_FLAGS
+    fi
     if [ $CONFIGURE -eq 1 ]; then
         echo "Configuring $target..."
-        ./configure --silent $CONFIGURE_TARGET $CONFIGURE_FLAGS $CONFIGURE_EXTRAS
+        ./configure --silent $CONFIGURE_FLAGS
     fi
     if [ $BUILD -eq 1 ]; then
         echo "Building $target..."
