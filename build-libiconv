@@ -1,0 +1,87 @@
+#!/bin/bash
+set -e
+# set -x
+
+help_text() {
+    echo "Usage:
+  ${0##*/} [-h] --host=... --prefix=... [--version=X.Y] [target1 target2 target3]
+
+  where targetN is e.g. aarch64-linux-android. If no targets are given
+  will build for aarch64-linux-android and arm-linux-androideabi.
+
+Options:
+
+  -h, --help
+    display this help and exit
+
+  --host=<host>
+    the build host (e.g. darwin-x86_64)
+
+  --prefix=<prefix>
+    the prefix to pass to configure
+
+  --version=<version>
+    the libiconv version to build. Defaults to 1.15"
+}
+
+version=1.15
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --prefix=*) prefix="${1#*=}"; shift 1;;
+        --host=*) host="${1#*=}"; shift 1;;
+        --version=*) version="${1#*=}"; shift 1;;
+        -h|--help) help_text; exit;;
+        -*) echo "unknown option: $1" >&2; exit 1;;
+        *) args+="$1"; shift 1;;
+    esac
+done
+
+if [ -z $host ]; then
+    echo "no --host given" >&2
+    exit 1
+fi
+if [ -z $prefix ]; then
+    echo "no --prefix given" >&2
+    exit 1
+fi
+
+
+TARGETS=${args:-"aarch64-linux-android arm-linux-androideabi"}
+
+
+if [ ! -f libiconv-$version.tar.gz ]; then
+    curl -O -L https://ftp.gnu.org/pub/gnu/libiconv/libiconv-$version.tar.gz
+fi
+tar xzf libiconv-$version.tar.gz
+cd libiconv-$version
+for target in $TARGETS; do
+    # extract the arch as the first component of the target triple
+    arch="${target%%-*}"
+    # rewrite aarch64 -> arm64; this is such a mess...
+    if [ "$arch" == "aarch64" ]; then arch=arm64; fi
+
+    ANDROID_HOST=$target
+    ANDROID_BUILD=$host
+    ANDROID_ARCH=$arch
+    ANDROID_NDK=$HOME/Library/Android/sdk/ndk-bundle
+    ANDROID_VERSION=24
+    ANDROID_TOOLCHAIN_VERSION=4.9
+    ANDROID_SYSROOT=$ANDROID_NDK/platforms/android-$ANDROID_VERSION/arch-$ANDROID_ARCH
+    CFLAGS=--sysroot=$ANDROID_SYSROOT
+    #export CPP=$ANDROID_HOST-gcc -E
+    CPPFLAGS=--sysroot=$ANDROID_SYSROOT
+    AR=$ANDROID_HOST-ar
+    RANLIB=$ANDROID_HOST-ranlib
+    PATH=$ANDROID_NDK/toolchains/$ANDROID_HOST-$ANDROID_TOOLCHAIN_VERSION/prebuilt/$ANDROID_BUILD/bin:$PATH
+    echo "Cleaning up build folder..."
+    make clean --silent
+    echo "Configuring $target..."
+    CFLAGS=$CFLAGS CPPFLAGS=$CPPFLAGS AR=$AR RANLIB=$RANLIB PATH=$PATH \
+          ./configure --prefix=$prefix/$target --host=$ANDROID_HOST --with-sysroot=$ANDROID_SYSROOT --silent
+    echo "Building $target"
+    CFLAGS=$CFLAGS CPPFLAGS=$CPPFLAGS AR=$AR RANLIB=$RANLIB PATH=$PATH \
+          make -j --silent
+    echo "Installing $target..."
+    make --silent install
+done
