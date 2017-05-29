@@ -1,0 +1,59 @@
+#!/bin/bash
+set -e
+# set -x
+
+help_text() {
+    echo "Usage:
+  ${0##*/} [-h] --prefix=... [--version=X.Y] [host1 host2 host3]
+
+  where hostN is e.g. aarch64-linux-android. If no hosts are given
+  will build for aarch64-linux-android, arm-linux-androideabi,
+  aarch64-apple-ios, x86_64-apple-ios, and arm-linux-gnueabihf.
+
+Options:
+
+  -h, --help
+    display this help and exit
+
+  --prefix=<prefix>
+    the prefix to pass to configure"
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --prefix=*) prefix="${1#*=}"; shift 1;;
+        -h|--help) help_text; exit;;
+        -*) echo "unknown option: $1" >&2; exit 1;;
+        *) args+="$1"; shift 1;;
+    esac
+done
+
+if [ -z $prefix ]; then
+    echo "no --prefix given" >&2
+    exit 1
+fi
+
+
+HOSTS=${args:-"aarch64-linux-android armv7-linux-androideabi aarch64-apple-ios x86_64-apple-ios arm-linux-gnueabihf"}
+
+
+if [ ! -d libffi ]; then
+    git clone https://github.com/zw3rk/libffi.git
+fi
+
+cd libffi
+for host in $HOSTS; do
+    echo "Cleaning up build folder..."
+    git clean -x -f -d
+    git reset --hard HEAD
+    ./autogen.sh
+    echo "Configuring $host..."
+    CC="${host}-clang" CXX="${host}-clang" \
+        ./configure --prefix=$prefix/$host --host=$host \
+        --enable-static=yes --enable-shared=yes \
+        --silent
+    echo "Building $host"
+    make -j --silent
+    echo "Installing $host..."
+    make --silent install
+done
