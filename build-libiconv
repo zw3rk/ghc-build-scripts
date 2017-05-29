@@ -74,11 +74,15 @@ for target in $TARGETS; do
     AR=$ANDROID_HOST-ar
     RANLIB=$ANDROID_HOST-ranlib
     PATH=$ANDROID_NDK/toolchains/$ANDROID_HOST-$ANDROID_TOOLCHAIN_VERSION/prebuilt/$ANDROID_BUILD/bin:$PATH
-    echo "Cleaning up build folder..."
-    make clean --silent
+    if [ -f Makefile ]; then
+        echo "Cleaning up build folder..."
+        make clean --silent
+    fi
     echo "Configuring $target..."
     CFLAGS=$CFLAGS CPPFLAGS=$CPPFLAGS AR=$AR RANLIB=$RANLIB PATH=$PATH \
-          ./configure --prefix=$prefix/$target --host=$ANDROID_HOST --with-sysroot=$ANDROID_SYSROOT --silent
+          ./configure --prefix=$prefix/$target --host=$ANDROID_HOST \
+                      --with-sysroot=$ANDROID_SYSROOT --silent \
+                      --enable-shared=no --enable-static=yes
     echo "Building $target"
     CFLAGS=$CFLAGS CPPFLAGS=$CPPFLAGS AR=$AR RANLIB=$RANLIB PATH=$PATH \
           make -j --silent
