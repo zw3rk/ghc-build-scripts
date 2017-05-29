@@ -4,7 +4,7 @@ set -e
 
 help_text() {
     echo "Usage:
-  ${0##*/} [-h][-d] --prefix=... --iconv=... --clang=... [target1 target2 target3]
+  ${0##*/} [-h][-d] --prefix=... --iconv=... --libffi=... --clang=... [target1 target2 target3]
 
 Options:
 
@@ -26,9 +26,43 @@ Options:
   --iconv=<iconv>
     path to iconv.
 
+  --libffi=<libffi>
+    path to libffi.
+
   --clang=<clang>
     path to the clang binary to use"
 }
+
+# -----------------------------------------------------------------------------
+# Helper functions
+function cabal_with_new_autoconfig () {
+    cabal=$1
+    pkg=$2
+    echo "Building $pkg..."
+    CABAL_FLAGS=
+    case $pkg in
+        *-head) CABAL_FLAGS+=" --source-repository=head"; pkg="${pkg%-*}";;
+        *) pkg=$pkg
+    esac
+    tmp_dir=$(mktemp -d)
+    (
+        cd $tmp_dir
+        # use system cabal to get the package, until we are certain that $cabal
+        # supports get properly.
+        cabal get $pkg $CABAL_FLAGS || true
+        (
+            cd $pkg*
+            # this is rather annoying, but until the upstream pacakges include
+            # update config.{guess,sub}, we'll need this hack to make -ios work.
+            curl -L -o config.guess "http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess"
+            curl -L -o config.sub "http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub"
+            $cabal install --force-reinstalls
+        )
+    )
+    rm -fR $tmp_dir
+}
+# -----------------------------------------------------------------------------
+
 
 CLEAN=1 # clean prior to building
 CONFIGURE=1 # run ./configure
@@ -44,6 +78,7 @@ while [ "$#" -gt 0 ]; do
         --with-devel) DEVEL=1; shift 1;;
         --prefix=*) PREFIX="${1#*=}"; shift 1;;
         --iconv=*) ICONV="${1#*=}"; shift 1;;
+        --libffi=*) LIBFFI="${1#*=}"; shift 1;;
         --clang=*) CLANG="${1#*=}"; shift 1;;
         -d|--debug) DEBUG=1; shift 1;;
         -h|--help) help_text; exit;;
@@ -52,7 +87,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-TARGETS=${args:-"host armv7-android arm64-android arm64-ios"}
+TARGETS=${args:-"host armv7-android aarch64-android aarch64-ios x86_64-ios arm-raspberrypi"}
 if [ $DEBUG -eq 1 ]; then
     echo "   PREFIX=$PREFIX"
     echo "    ICONV=$ICONV"
@@ -70,7 +105,7 @@ USE_DEVEL_FLAGS=" --enable-bootstrap-with-devel-snapshot --with-ghc=${PREFIX}/bi
 for target in $TARGETS
 do
     echo "TARGET: $target"
-    CONFIGURE_FLAGS="--prefix=${PREFIX} --disable-large-address-space --with-clang=${CLANG}"
+    CONFIGURE_FLAGS="--prefix=${PREFIX} --disable-large-address-space" # --with-clang=${CLANG}"
     CABAL="cabal"
     CROSS=1
 
@@ -80,23 +115,42 @@ do
             CROSS=0
             ;;
         armv7-android)
-            CONFIGURE_FLAGS+=" --target=armv7-none-linux-androideabi"
+            CONFIGURE_FLAGS+=" --target=armv7-linux-androideabi"
             CONFIGURE_FLAGS+=" --with-iconv-includes=$ICONV/arm-linux-androideabi/include"
             CONFIGURE_FLAGS+=" --with-iconv-libraries=$ICONV/arm-linux-androideabi/lib"
+            CONFIGURE_FLAGS+=" --with-system-libffi"
+            CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/armv7-linux-androideabi/include"
+            CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/armv7-linux-androideabi/lib"
             MK_FLAVOUR="quick-cross"
-            CABAL=armv7-none-linux-androideabi-cabal
+            CABAL=armv7-linux-androideabi-cabal
             ;;
-        arm64-android)
-            CONFIGURE_FLAGS+=" --target=aarch64-none-linux-android"
+        aarch64-android)
+            CONFIGURE_FLAGS+=" --target=aarch64-linux-android"
             CONFIGURE_FLAGS+=" --with-iconv-includes=$ICONV/aarch64-linux-android/include"
             CONFIGURE_FLAGS+=" --with-iconv-libraries=$ICONV/aarch64-linux-android/lib"
             MK_FLAVOUR="quick-cross"
-            CABAL=aarch64-none-linux-android-cabal
+            CABAL=aarch64-linux-android-cabal
             ;;
-        arm64-ios)
-            CONFIGURE_FLAGS+=" --target=aarch64-apple-darwin14"
+        aarch64-ios)
+            CONFIGURE_FLAGS+=" --target=aarch64-apple-ios"
             MK_FLAVOUR="quick-cross"
-            CABAL=aarch64-apple-darwin14-cabal
+            CABAL=aarch64-apple-ios-cabal
+            ;;
+        x86_64-ios)
+            CONFIGURE_FLAGS+=" --target=x86_64-apple-ios"
+            CONFIGURE_FLAGS+=" --with-system-libffi"
+            CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/x86_64-apple-ios/include"
+            CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/x86_64-apple-ios/lib"            
+            MK_FLAVOUR="quick-cross"
+            CABAL=x86_64-apple-ios-cabal
+            ;;
+        arm-raspberrypi)
+            CONFIGURE_FLAGS+=" --target=arm-linux-gnueabihf"
+            CONFIGURE_FLAGS+=" --with-system-libffi"
+            CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/arm-linux-gnueabihf/include"
+            CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/arm-linux-gnueabihf/lib"
+            MK_FLAVOUR="quick-cross"
+            CABAL=arm-linux-gnueabihf-cabal
             ;;
         *)
             exit "unknown target"
@@ -106,6 +160,7 @@ do
     if [ $CLEAN -eq 1 ]; then
 
         git clean -x --force -d --quiet
+        git reset --hard HEAD
         make --silent clean && make -s distclean
 
         cat mk/build.mk.sample|sed -E "s/^#BuildFlavour[ ]+= ${MK_FLAVOUR}$/BuildFlavour = ${MK_FLAVOUR}/" > mk/build.mk
@@ -141,6 +196,7 @@ do
     PATH=$PREFIX/bin:$PATH $CABAL update
     if [ $CROSS -eq 1 ]; then
         # PATH=$PREFIX/bin:$PATH $CABAL install cryptonite -f-integer-gmp --disable-library-stripping
+        PATH=$PREFIX/bin:$PATH cabal_with_new_autoconfig $CABAL network
         PATH=$PREFIX/bin:$PATH $CABAL install -flibrary
     else
         # PATH=$PREFIX/bin:$PATH $CABAL install cryptonite
