@@ -195,11 +195,8 @@ do
     cd iserv
     PATH=$PREFIX/bin:$PATH $CABAL update
     if [ $CROSS -eq 1 ]; then
-        # PATH=$PREFIX/bin:$PATH $CABAL install cryptonite -f-integer-gmp --disable-library-stripping
-        PATH=$PREFIX/bin:$PATH cabal_with_new_autoconfig $CABAL network
         PATH=$PREFIX/bin:$PATH $CABAL install -flibrary
     else
-        # PATH=$PREFIX/bin:$PATH $CABAL install cryptonite
         PATH=$PREFIX/bin:$PATH $CABAL install -flibrary -fproxy
     fi
     cd ..
