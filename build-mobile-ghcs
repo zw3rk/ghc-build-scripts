@@ -133,6 +133,9 @@ do
             ;;
         aarch64-ios)
             CONFIGURE_FLAGS+=" --target=aarch64-apple-ios"
+            CONFIGURE_FLAGS+=" --with-system-libffi"
+            CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/aarch64-apple-ios/include"
+            CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/aarch64-apple-ios/lib"
             MK_FLAVOUR="quick-cross"
             CABAL=aarch64-apple-ios-cabal
             ;;
@@ -140,7 +143,7 @@ do
             CONFIGURE_FLAGS+=" --target=x86_64-apple-ios"
             CONFIGURE_FLAGS+=" --with-system-libffi"
             CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/x86_64-apple-ios/include"
-            CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/x86_64-apple-ios/lib"            
+            CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/x86_64-apple-ios/lib"
             MK_FLAVOUR="quick-cross"
             CABAL=x86_64-apple-ios-cabal
             ;;
