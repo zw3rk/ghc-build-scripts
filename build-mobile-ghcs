@@ -111,6 +111,7 @@ do
 
     case $target in
         host)
+            CONFIGURE_FLAGS+=" --disable-ld-override"
             MK_FLAVOUR="quick-llvm"
             CROSS=0
             ;;
@@ -132,6 +133,7 @@ do
             CABAL=aarch64-linux-android-cabal
             ;;
         aarch64-ios)
+            CONFIGURE_FLAGS+=" --disable-ld-override"
             CONFIGURE_FLAGS+=" --target=aarch64-apple-ios"
             CONFIGURE_FLAGS+=" --with-system-libffi"
             CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/aarch64-apple-ios/include"
@@ -140,6 +142,7 @@ do
             CABAL=aarch64-apple-ios-cabal
             ;;
         x86_64-ios)
+            CONFIGURE_FLAGS+=" --disable-ld-override"
             CONFIGURE_FLAGS+=" --target=x86_64-apple-ios"
             CONFIGURE_FLAGS+=" --with-system-libffi"
             CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/x86_64-apple-ios/include"
