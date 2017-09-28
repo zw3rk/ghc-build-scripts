@@ -30,7 +30,8 @@ Options:
     path to libffi.
 
   --clang=<clang>
-    path to the clang binary to use"
+    path to the clang binary to use
+    defaults to `clang`"
 }
 
 # -----------------------------------------------------------------------------
@@ -69,6 +70,7 @@ CONFIGURE=1 # run ./configure
 BUILD=1 # run make
 DEBUG=0 # debug values
 DEVEL=0 # Use development snapshot (fro the cross compiler only...)
+CLANG=
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -100,19 +102,18 @@ if [ $DEBUG -eq 1 ]; then
     exit
 fi
 
-USE_DEVEL_FLAGS=" --enable-bootstrap-with-devel-snapshot --with-ghc=${PREFIX}/bin/ghc"
+USE_DEVEL_FLAGS=" --enable-bootstrap-with-devel-snapshot" # --with-ghc=${PREFIX}/bin/ghc"
 
 for target in $TARGETS
 do
     echo "TARGET: $target"
-    CONFIGURE_FLAGS="--prefix=${PREFIX} --disable-large-address-space" # --with-clang=${CLANG}"
+    CONFIGURE_FLAGS="--prefix=${PREFIX} --disable-large-address-space" 
     CABAL="cabal"
     CROSS=1
 
     case $target in
         host)
-            CONFIGURE_FLAGS+=" --disable-ld-override"
-            MK_FLAVOUR="quick-llvm"
+            MK_FLAVOUR="quick"
             CROSS=0
             ;;
         armv7-android)
@@ -122,32 +123,30 @@ do
             CONFIGURE_FLAGS+=" --with-system-libffi"
             CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/armv7-linux-androideabi/include"
             CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/armv7-linux-androideabi/lib"
-            MK_FLAVOUR="quick-cross"
+            MK_FLAVOUR="quick-cross-ng"
             CABAL=armv7-linux-androideabi-cabal
             ;;
         aarch64-android)
             CONFIGURE_FLAGS+=" --target=aarch64-linux-android"
             CONFIGURE_FLAGS+=" --with-iconv-includes=$ICONV/aarch64-linux-android/include"
             CONFIGURE_FLAGS+=" --with-iconv-libraries=$ICONV/aarch64-linux-android/lib"
-            MK_FLAVOUR="quick-cross"
+            MK_FLAVOUR="quick-cross-ng"
             CABAL=aarch64-linux-android-cabal
             ;;
         aarch64-ios)
-            CONFIGURE_FLAGS+=" --disable-ld-override"
             CONFIGURE_FLAGS+=" --target=aarch64-apple-ios"
             CONFIGURE_FLAGS+=" --with-system-libffi"
             CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/aarch64-apple-ios/include"
             CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/aarch64-apple-ios/lib"
-            MK_FLAVOUR="quick-cross"
+            MK_FLAVOUR="quick-cross-ng"
             CABAL=aarch64-apple-ios-cabal
             ;;
         x86_64-ios)
-            CONFIGURE_FLAGS+=" --disable-ld-override"
             CONFIGURE_FLAGS+=" --target=x86_64-apple-ios"
             CONFIGURE_FLAGS+=" --with-system-libffi"
             CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/x86_64-apple-ios/include"
             CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/x86_64-apple-ios/lib"
-            MK_FLAVOUR="quick-cross"
+            MK_FLAVOUR="quick-cross-ng"
             CABAL=x86_64-apple-ios-cabal
             ;;
         arm-raspberrypi)
@@ -155,7 +154,7 @@ do
             CONFIGURE_FLAGS+=" --with-system-libffi"
             CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/arm-linux-gnueabihf/include"
             CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/arm-linux-gnueabihf/lib"
-            MK_FLAVOUR="quick-cross"
+            MK_FLAVOUR="quick-cross-ng"
             CABAL=arm-linux-gnueabihf-cabal
             ;;
         *)
@@ -170,8 +169,10 @@ do
         make --silent clean && make -s distclean
 
         cat mk/build.mk.sample|sed -E "s/^#BuildFlavour[ ]+= ${MK_FLAVOUR}$/BuildFlavour = ${MK_FLAVOUR}/" > mk/build.mk
+        # force -fPIC, otherwise at least aarch64 will break.
+        echo "SRC_HC_OPTS += -fPIC" >> mk/build.mk
         # boot after mk/build.mk, to silence the warning about a missing mk/build.mk
-        ./boot
+        ./boot > /dev/null
     fi
 
     echo "=== mk/build.mk ==="
@@ -182,14 +183,15 @@ do
     # DYNAMIC_GHC_PROGRAMS and DYNAMIC_TOO works on iOS, when compiling on macOS.
     #    echo "DYNAMIC_GHC_PROGRAMS = YES" >> mk/build.mk
     #    echo "DYNAMIC_TOO = YES" >> mk/build.mk
-    if [ $CROSS -eq 1 -a $DEVEL -eq 1 ]; then
+    if [ $DEVEL -eq 1 ]; then
         echo "Adding devel snapshot flags..."
         CONFIGURE_FLAGS+=$USE_DEVEL_FLAGS
         echo $CONFIGURE_FLAGS
     fi
     if [ $CONFIGURE -eq 1 ]; then
         echo "Configuring $target..."
-        ./configure --silent $CONFIGURE_FLAGS
+        echo "CC=$CLANG ./configure --silent $CONFIGURE_FLAGS"
+        CC=$CLANG ./configure --silent $CONFIGURE_FLAGS
     fi
     if [ $BUILD -eq 1 ]; then
         echo "Building $target..."
@@ -207,4 +209,7 @@ do
     fi
     cd ..
     echo "TARGET: $target done."
+    GITREV=$(git rev-parse --short HEAD)
+    mkdir -p "../ghc-bindist/${GITREV}"
+    BINARY_DIST_DIR="../ghc-bindist/${GITREV}/" make binary-dist
 done
