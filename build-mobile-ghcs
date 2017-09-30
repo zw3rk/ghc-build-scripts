@@ -18,10 +18,10 @@ Options:
     do not clean the tree before building
 
   --no-configure
-    do not run ./boot or ./configure
+    do not run './boot' or './configure'
 
   --no-install
-    do not run `make install`
+    do not run 'make install'
 
   --prefix=<prefix>
     the prefix to pass to configure
@@ -34,7 +34,7 @@ Options:
 
   --clang=<clang>
     path to the clang binary to use
-    defaults to `clang`"
+    defaults to 'clang'"
 }
 
 # -----------------------------------------------------------------------------
@@ -50,12 +50,12 @@ function cabal_with_new_autoconfig () {
     esac
     tmp_dir=$(mktemp -d)
     (
-        cd $tmp_dir
+        cd "$tmp_dir"
         # use system cabal to get the package, until we are certain that $cabal
         # supports get properly.
-        cabal get $pkg $CABAL_FLAGS || true
+        cabal get "$pkg" "$CABAL_FLAGS" || true
         (
-            cd $pkg*
+            cd "$pkg"*
             # this is rather annoying, but until the upstream pacakges include
             # update config.{guess,sub}, we'll need this hack to make -ios work.
             curl -L -o config.guess "http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess"
@@ -63,7 +63,7 @@ function cabal_with_new_autoconfig () {
             $cabal install --force-reinstalls
         )
     )
-    rm -fR $tmp_dir
+    rm -fR "$tmp_dir"
 }
 # -----------------------------------------------------------------------------
 
@@ -181,7 +181,7 @@ do
         git reset --hard HEAD
         make --silent clean && make -s distclean
 
-        cat mk/build.mk.sample|sed -E "s/^#BuildFlavour[ ]+= ${MK_FLAVOUR}$/BuildFlavour = ${MK_FLAVOUR}/" > mk/build.mk
+        sed -E "s/^#BuildFlavour[ ]+= ${MK_FLAVOUR}$/BuildFlavour = ${MK_FLAVOUR}/" < mk/build.mk.sample > mk/build.mk
         # force -fPIC, otherwise at least aarch64 will break.
         echo "SRC_HC_OPTS += -fPIC" >> mk/build.mk
         # boot after mk/build.mk, to silence the warning about a missing mk/build.mk
@@ -189,7 +189,7 @@ do
     fi
 
     echo "=== mk/build.mk ==="
-    cat mk/build.mk|grep -v "^#"|grep -v "^$"
+    grep -v "^#\|^$" mk/build.mk
     echo "==================="
     # DYNAMIC_BY_DEFAULT doesn't work on iOS
     #    echo "DYNAMIC_BY_DEFAULT = YES" >> mk/build.mk
@@ -199,12 +199,12 @@ do
     if [ $DEVEL -eq 1 ]; then
         echo "Adding devel snapshot flags..."
         CONFIGURE_FLAGS+=$USE_DEVEL_FLAGS
-        echo $CONFIGURE_FLAGS
+        echo "$CONFIGURE_FLAGS"
     fi
     if [ $CONFIGURE -eq 1 ]; then
         echo "Configuring $target..."
         echo "CC=$CLANG ./configure --silent $CONFIGURE_FLAGS"
-        CC=$CLANG ./configure --silent $CONFIGURE_FLAGS
+        CC=$CLANG ./configure --silent "$CONFIGURE_FLAGS"
     fi
     if [ $BUILD -eq 1 ]; then
         echo "Building $target..."
@@ -214,14 +214,13 @@ do
         echo "Installing $target..."
         make --silent install
         echo "Building and installing iserv for $target..."
-        cd iserv
-        PATH=$PREFIX/bin:$PATH $CABAL update
-        if [ $CROSS -eq 1 ]; then
-            PATH=$PREFIX/bin:$PATH $CABAL install -flibrary
-        else
-            PATH=$PREFIX/bin:$PATH $CABAL install -flibrary -fproxy
-        fi
-        cd ..
+        (cd iserv
+         PATH=$PREFIX/bin:$PATH $CABAL update
+         if [ $CROSS -eq 1 ]; then
+             PATH=$PREFIX/bin:$PATH $CABAL install -flibrary
+         else
+             PATH=$PREFIX/bin:$PATH $CABAL install -flibrary -fproxy
+         fi)
     fi
     echo "TARGET: $target done."
     GITREV=$(git rev-parse --short HEAD)
