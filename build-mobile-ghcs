@@ -20,6 +20,9 @@ Options:
   --no-configure
     do not run ./boot or ./configure
 
+  --no-install
+    do not run `make install`
+
   --prefix=<prefix>
     the prefix to pass to configure
 
@@ -68,6 +71,7 @@ function cabal_with_new_autoconfig () {
 CLEAN=1 # clean prior to building
 CONFIGURE=1 # run ./configure
 BUILD=1 # run make
+INSTALL=1 # run make install
 DEBUG=0 # debug values
 DEVEL=0 # Use development snapshot (fro the cross compiler only...)
 CLANG=
@@ -77,6 +81,7 @@ while [ "$#" -gt 0 ]; do
         --no-clean) CLEAN=0; shift 1;;
         --no-configure) CONFIGURE=0; shift 1;;
         --no-build) BUILD=0; shift 1;;
+        --no-install) INSTALL=0; shift 1;;
         --with-devel) DEVEL=1; shift 1;;
         --prefix=*) PREFIX="${1#*=}"; shift 1;;
         --iconv=*) ICONV="${1#*=}"; shift 1;;
@@ -196,18 +201,20 @@ do
     if [ $BUILD -eq 1 ]; then
         echo "Building $target..."
         make --silent -j8
+    fi
+    if [ $INSTALL -eq 1 ]; then
         echo "Installing $target..."
         make --silent install
         echo "Building and installing iserv for $target..."
+        cd iserv
+        PATH=$PREFIX/bin:$PATH $CABAL update
+        if [ $CROSS -eq 1 ]; then
+            PATH=$PREFIX/bin:$PATH $CABAL install -flibrary
+        else
+            PATH=$PREFIX/bin:$PATH $CABAL install -flibrary -fproxy
+        fi
+        cd ..
     fi
-    cd iserv
-    PATH=$PREFIX/bin:$PATH $CABAL update
-    if [ $CROSS -eq 1 ]; then
-        PATH=$PREFIX/bin:$PATH $CABAL install -flibrary
-    else
-        PATH=$PREFIX/bin:$PATH $CABAL install -flibrary -fproxy
-    fi
-    cd ..
     echo "TARGET: $target done."
     GITREV=$(git rev-parse --short HEAD)
     mkdir -p "../ghc-bindist/${GITREV}"
