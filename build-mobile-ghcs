@@ -125,9 +125,11 @@ do
             CONFIGURE_FLAGS+=" --target=armv7-linux-androideabi"
             CONFIGURE_FLAGS+=" --with-iconv-includes=$ICONV/arm-linux-androideabi/include"
             CONFIGURE_FLAGS+=" --with-iconv-libraries=$ICONV/arm-linux-androideabi/lib"
-            CONFIGURE_FLAGS+=" --with-system-libffi"
-            CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/armv7-linux-androideabi/include"
-            CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/armv7-linux-androideabi/lib"
+            if [ ! -z "$LIBFFI" ]; then
+                CONFIGURE_FLAGS+=" --with-system-libffi"
+                CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/armv7-linux-androideabi/include"
+                CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/armv7-linux-androideabi/lib"
+            fi
             MK_FLAVOUR="quick-cross-ng"
             CABAL=armv7-linux-androideabi-cabal
             ;;
@@ -140,25 +142,31 @@ do
             ;;
         aarch64-ios)
             CONFIGURE_FLAGS+=" --target=aarch64-apple-ios"
-            CONFIGURE_FLAGS+=" --with-system-libffi"
-            CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/aarch64-apple-ios/include"
-            CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/aarch64-apple-ios/lib"
+            if [ ! -z "$LIBFFI" ]; then
+                CONFIGURE_FLAGS+=" --with-system-libffi"
+                CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/aarch64-apple-ios/include"
+                CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/aarch64-apple-ios/lib"
+            fi
             MK_FLAVOUR="quick-cross-ng"
             CABAL=aarch64-apple-ios-cabal
             ;;
         x86_64-ios)
             CONFIGURE_FLAGS+=" --target=x86_64-apple-ios"
-            CONFIGURE_FLAGS+=" --with-system-libffi"
-            CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/x86_64-apple-ios/include"
-            CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/x86_64-apple-ios/lib"
+            if [ ! -z "$LIBFFI" ]; then
+                CONFIGURE_FLAGS+=" --with-system-libffi"
+                CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/x86_64-apple-ios/include"
+                CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/x86_64-apple-ios/lib"
+            fi
             MK_FLAVOUR="quick-cross-ng"
             CABAL=x86_64-apple-ios-cabal
             ;;
         arm-raspberrypi)
             CONFIGURE_FLAGS+=" --target=arm-linux-gnueabihf"
-            CONFIGURE_FLAGS+=" --with-system-libffi"
-            CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/arm-linux-gnueabihf/include"
-            CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/arm-linux-gnueabihf/lib"
+            if [ ! -z "$LIBFFI" ]; then
+                CONFIGURE_FLAGS+=" --with-system-libffi"
+                CONFIGURE_FLAGS+=" --with-ffi-includes=$LIBFFI/arm-linux-gnueabihf/include"
+                CONFIGURE_FLAGS+=" --with-ffi-libraries=$LIBFFI/arm-linux-gnueabihf/lib"
+            fi
             MK_FLAVOUR="quick-cross-ng"
             CABAL=arm-linux-gnueabihf-cabal
             ;;
