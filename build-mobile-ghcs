@@ -204,7 +204,7 @@ do
     if [ $CONFIGURE -eq 1 ]; then
         echo "Configuring $target..."
         echo "CC=$CLANG ./configure --silent $CONFIGURE_FLAGS"
-        CC=$CLANG ./configure --silent "$CONFIGURE_FLAGS"
+        CC=$CLANG ./configure --silent $CONFIGURE_FLAGS
     fi
     if [ $BUILD -eq 1 ]; then
         echo "Building $target..."
@@ -214,7 +214,7 @@ do
         echo "Installing $target..."
         make --silent install
         echo "Building and installing iserv for $target..."
-        (cd iserv
+        (cd iserv || exit
          PATH=$PREFIX/bin:$PATH $CABAL update
          if [ $CROSS -eq 1 ]; then
              PATH=$PREFIX/bin:$PATH $CABAL install -flibrary
