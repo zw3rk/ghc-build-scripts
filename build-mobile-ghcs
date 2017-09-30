@@ -118,7 +118,7 @@ do
 
     case $target in
         host)
-            MK_FLAVOUR="quick"
+            MK_FLAVOUR="prof"
             CROSS=0
             ;;
         armv7-android)
