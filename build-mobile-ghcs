@@ -107,18 +107,18 @@ if [ $DEBUG -eq 1 ]; then
     exit
 fi
 
-USE_DEVEL_FLAGS=" --enable-bootstrap-with-devel-snapshot" # --with-ghc=${PREFIX}/bin/ghc"
+USE_DEVEL_FLAGS=" --enable-bootstrap-with-devel-snapshot --with-ghc=$PWD/_host/stage1/bin/ghc"
 
 for target in $TARGETS
 do
     echo "TARGET: $target"
-    CONFIGURE_FLAGS="--prefix=${PREFIX} --disable-large-address-space" 
+    CONFIGURE_FLAGS=" --disable-large-address-space" 
     CABAL="cabal"
     CROSS=1
 
     case $target in
         host)
-            MK_FLAVOUR="prof"
+            MK_FLAVOUR="quick-with-ng"
             CROSS=0
             ;;
         armv7-android)
@@ -176,54 +176,35 @@ do
     esac
 
     if [ $CLEAN -eq 1 ]; then
-
-        git clean -x --force -d --quiet
-        git reset --hard HEAD
+        # drop everything, except for build folders
         make --silent clean && make -s distclean
-
-        sed -E "s/^#BuildFlavour[ ]+= ${MK_FLAVOUR}$/BuildFlavour = ${MK_FLAVOUR}/" < mk/build.mk.sample > mk/build.mk
+        git clean -x --force -d --quiet -e "_*"
+        git reset --hard HEAD
+        git submodule update --init --recursive
         # force -fPIC, otherwise at least aarch64 will break.
-        echo "SRC_HC_OPTS += -fPIC" >> mk/build.mk
+        # echo "SRC_HC_OPTS += -fPIC" >> mk/build.mk
         # boot after mk/build.mk, to silence the warning about a missing mk/build.mk
-        ./boot > /dev/null
+        ./boot --hadrian > /dev/null
     fi
 
-    echo "=== mk/build.mk ==="
-    grep -v "^#\|^$" mk/build.mk
-    echo "==================="
-    # DYNAMIC_BY_DEFAULT doesn't work on iOS
-    #    echo "DYNAMIC_BY_DEFAULT = YES" >> mk/build.mk
-    # DYNAMIC_GHC_PROGRAMS and DYNAMIC_TOO works on iOS, when compiling on macOS.
-    #    echo "DYNAMIC_GHC_PROGRAMS = YES" >> mk/build.mk
-    #    echo "DYNAMIC_TOO = YES" >> mk/build.mk
-    if [ $DEVEL -eq 1 ]; then
+    if [ $DEVEL -eq 1 -o $CROSS -eq 1 ]; then
         echo "Adding devel snapshot flags..."
         CONFIGURE_FLAGS+=$USE_DEVEL_FLAGS
         echo "$CONFIGURE_FLAGS"
     fi
     if [ $CONFIGURE -eq 1 ]; then
         echo "Configuring $target..."
-        echo "CC=$CLANG ./configure --silent $CONFIGURE_FLAGS"
-        CC=$CLANG ./configure --silent $CONFIGURE_FLAGS
+        # the CC_STAGE0 is pretty much a hack, as for what ever
+        # reason the ghc --info returns `gcc`.
+        echo "CC=$CLANG CC_STAGE0=clang ./configure --silent $CONFIGURE_FLAGS"
+        CC=$CLANG CC_STAGE0=clang ./configure --silent $CONFIGURE_FLAGS
     fi
     if [ $BUILD -eq 1 ]; then
         echo "Building $target..."
-        make --silent -j8
-    fi
-    if [ $INSTALL -eq 1 ]; then
-        echo "Installing $target..."
-        make --silent install
-        echo "Building and installing iserv for $target..."
-        (cd iserv || exit
-         PATH=$PREFIX/bin:$PATH $CABAL update
-         if [ $CROSS -eq 1 ]; then
-             PATH=$PREFIX/bin:$PATH $CABAL install -flibrary
-         else
-             PATH=$PREFIX/bin:$PATH $CABAL install -flibrary -fproxy
-         fi)
+        GITREV=$(git rev-parse --short HEAD)
+        BASE=$(pwd)
+        mkdir -p "${BASE}/../ghc-bindist/${GITREV}"
+        (cd hadrian && BINARY_DIST_DIR="${BASE}/../ghc-bindist/${GITREV}/" ./build.sh --flavour=$MK_FLAVOUR binary-dist -j --build-root=_${target})
     fi
     echo "TARGET: $target done."
-    GITREV=$(git rev-parse --short HEAD)
-    mkdir -p "../ghc-bindist/${GITREV}"
-    BINARY_DIST_DIR="../ghc-bindist/${GITREV}/" make binary-dist
 done
