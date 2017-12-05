@@ -112,7 +112,7 @@ USE_DEVEL_FLAGS=" --enable-bootstrap-with-devel-snapshot --with-ghc=$PWD/_host/s
 for target in $TARGETS
 do
     echo "TARGET: $target"
-    CONFIGURE_FLAGS=" --disable-large-address-space" 
+    CONFIGURE_FLAGS=" --disable-large-address-space --disable-ld-override"
     CABAL="cabal"
     CROSS=1
 
@@ -204,7 +204,7 @@ do
         GITREV=$(git rev-parse --short HEAD)
         BASE=$(pwd)
         mkdir -p "${BASE}/../ghc-bindist/${GITREV}"
-        (cd hadrian && BINARY_DIST_DIR="${BASE}/../ghc-bindist/${GITREV}/" ./build.sh --flavour=$MK_FLAVOUR binary-dist -j --build-root=_${target})
+        (cd hadrian && BINARY_DIST_DIR="${BASE}/../ghc-bindist/${GITREV}/" ./build.sh --flavour=$MK_FLAVOUR binary-dist -j --build-root=_${target} || true)
     fi
     echo "TARGET: $target done."
 done
