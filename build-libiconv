@@ -67,13 +67,17 @@ for target in $TARGETS; do
     ANDROID_NDK=$HOME/Library/Android/sdk/ndk-bundle
     ANDROID_VERSION=24
     ANDROID_TOOLCHAIN_VERSION=4.9
+    case "$arch" in
+        x86*) ANDROID_TOOLCHAIN=$arch-$ANDROID_TOOLCHAIN_VERSION ;;
+        *)    ANDROID_TOOLCHAIN=$target-$ANDROID_TOOLCHAIN_VERSION ;;
+    esac
     ANDROID_SYSROOT=$ANDROID_NDK/platforms/android-$ANDROID_VERSION/arch-$ANDROID_ARCH
     CFLAGS=--sysroot=$ANDROID_SYSROOT
     #export CPP=$ANDROID_HOST-gcc -E
     CPPFLAGS=--sysroot=$ANDROID_SYSROOT
     AR=$ANDROID_HOST-ar
     RANLIB=$ANDROID_HOST-ranlib
-    PATH=$ANDROID_NDK/toolchains/$ANDROID_HOST-$ANDROID_TOOLCHAIN_VERSION/prebuilt/$ANDROID_BUILD/bin:$PATH
+    PATH=$ANDROID_NDK/toolchains/$ANDROID_TOOLCHAIN/prebuilt/$ANDROID_BUILD/bin:$PATH
     if [ -f Makefile ]; then
         echo "Cleaning up build folder..."
         make clean --silent

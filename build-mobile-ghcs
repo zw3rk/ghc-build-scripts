@@ -140,6 +140,13 @@ do
             MK_FLAVOUR="quick-cross-ng"
             CABAL=aarch64-linux-android-cabal
             ;;
+        x86_64-android)
+            CONFIGURE_FLAGS+=" --target=x86_64-linux-android"
+            CONFIGURE_FLAGS+=" --with-iconv-includes=$ICONV/x86_64-linux-android/include"
+            CONFIGURE_FLAGS+=" --with-iconv-libraries=$ICONV/x86_64-linux-android/lib"
+            MK_FLAVOUR="quick-cross-ng"
+            CABAL=x86_64-linux-android-cabal
+            ;;
         aarch64-ios)
             CONFIGURE_FLAGS+=" --target=aarch64-apple-ios"
             if [ ! -z "$LIBFFI" ]; then
