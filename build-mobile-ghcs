@@ -94,7 +94,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-TARGETS=${args:-"host armv7-android aarch64-android aarch64-ios x86_64-ios arm-raspberrypi"}
+TARGETS=${args:-"host x86_64-android armv7-android aarch64-android aarch64-ios x86_64-ios arm-raspberrypi"}
 if [ $DEBUG -eq 1 ]; then
     echo "   PREFIX=$PREFIX"
     echo "    ICONV=$ICONV"
@@ -158,6 +158,14 @@ do
             CABAL=aarch64-apple-ios-cabal
             ;;
         x86_64-ios)
+            # Apples iPhone Simulator SDK does not ship the x86_64 mach-o headers for some
+            # reason.  A radar has been filed, but no visible action has happened so far.
+            # We can however just copy them over from macos.
+            if [ ! -d /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/usr/include/mach-o/x86_64 ]; then
+                echo "iPhone Simulator x86_64 SDK is missing mach-o headers; will copy them over from the macos SDK (via sudo)"
+                sudo cp -fR /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/mach-o/x86_64 \
+                            /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/usr/include/mach-o/
+            fi
             CONFIGURE_FLAGS+=" --target=x86_64-apple-ios"
             if [ ! -z "$LIBFFI" ]; then
                 CONFIGURE_FLAGS+=" --with-system-libffi"
